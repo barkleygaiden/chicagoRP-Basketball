@@ -11,22 +11,25 @@ SWEP.ViewModelFOV = 90
 SWEP.Slot = 0
 SWEP.SlotPos = 5
 
-function SWEP:Ammo1() -- For third-party HUD's
-    return 1
-end
+-- traces in think function to drop ball once dunked
+-- MRW setupmove detour
+-- primary/secondary code
 
-function SWEP:Ammo2() -- For third-party HUD's
-    return 1
+function SWEP:SetupDataTables()
+    self:NetworkVar("Bool", 0, "IsThrowing")
+    self:NetworkVar("Bool", 1, "IsDunking")
 end
 
 function SWEP:Initialize()
     self.m_bInitialized = true
+    self.IsBasketball = true
 
     if CLIENT and !self.m_bDeployed then
         self:CallOnClient("Deploy")
     end
 
-    -- code here
+    self:SetIsThrowing(false)
+    self:SetIsDunking(false)
 end
 
 local ballAddPos = Vector(0, 5, 0)
@@ -39,21 +42,39 @@ function SWEP:Deploy()
     local owner = self:GetOwner()
 
     if SERVER then
-    	local ballPos = owner:GetPos() + ballAddPos
+        local ballPos = owner:GetPos() + ballAddPos
 
-    	local basketball = ents.Create("chicagoRP_basketball")
-    	basketball:SetPos(ballPos)
-    	basketball:Spawn()
-    	basketball:Activate()
+        local basketball = ents.Create("chicagorp_basketball")
+        basketball:SetPos(ballPos)
+        basketball:Spawn()
+        basketball:Activate()
 
-    	self.BasketballProp = basketball
+        basketball:SetPreventTransmit(owner, true)
+
+        self.BasketballProp = basketball
     end
-
-    -- aa
 end
 
 function SWEP:Holster()
-    -- aa
+    if self:GetIsThrowing() or self:GetIsDunking() then return false end
+
+    self:SendWeaponAnim(ACT_VM_HOLSTER)
+
+    SWEP:RemoveBasketball()
+
+    return true
+end
+
+function SWEP:Ammo1() -- For third-party HUD's
+    return 1
+end
+
+function SWEP:Ammo2() -- For third-party HUD's
+    return 1
+end
+
+function SWEP:OnDrop()
+    self:Remove() -- We shouldn't drop this since the basketball prop is the weapon.
 end
 
 function SWEP:Think()
@@ -61,27 +82,102 @@ function SWEP:Think()
         self:Initialize()
     end
 
+    self:BallHitWall() -- Does this really have to be serverside too?
+
     local owner = self:GetOwner()
 
-    if !IsValid(owner) or self.IsThrowing then return end
+    if !IsValid(owner) then return end
 
+    if SERVER then
+        self:UpdateBallPos()
+    end
+
+    if self:GetIsThrowing() or self:GetIsDunking() then return end
+
+    local isMoving = ply:GetVelocity():LengthSqr() > 0
     local onGround = owner:OnGround()
 
-    if onGround then
+    if isMoving and onGround then
+        local sequence = self:LookupSequence("idle")
 
-    else
+        self:SendViewModelMatchingSequence(sequence)
+    elseif isMoving and !onGround
+        local sequence = self:LookupSequence("idleair")
 
-    -- code here
+        self:SendViewModelMatchingSequence(sequence)
+    end
+
+    if !isMoving then
+        local sequence = self:LookupSequence("holdprimary")
+
+        self:SendViewModelMatchingSequence(sequence)
+    end
 end
 
 function SWEP:PrimaryAttack()
-	self.IsThrowing = true
-    -- aa
+    if self:GetIsThrowing() or self:GetIsDunking() then return end
+
+    if SERVER and self:GetNearWall() and IsValid(self.PassablePlayer) then
+        SWEP:RemoveBasketball()
+        self:Remove()
+
+        self.PassablePlayer:Give("chicagorp_basketball")
+
+        return
+    end
+
+    if IsFirstTimePredicted() then
+        -- codehere
+    end
+
+    if SERVER then
+        self:SetIsThrowing(true)
+    end
 end
 
 function SWEP:SecondaryAttack()
-	self.IsThrowing = true
-    -- aa
+    if self:GetIsThrowing() or self:GetIsDunking() then return end
+
+    if SERVER and self:GetNearWall() and IsValid(self.PassablePlayer) then
+        SWEP:RemoveBasketball()
+        self:Remove()
+
+        self.PassablePlayer:Give("chicagorp_basketball")
+
+        return
+    end
+
+    if IsFirstTimePredicted() then
+        -- codehere
+    end
+
+    if SERVER then
+        self:SetIsDunking(true)
+    end
+end
+
+function SWEP:RemoveBasketball()
+	if !SERVER then return end 
+	if !IsValid(self.BasketballProp) then return end
+
+	self.BasketballProp:Remove()
+end
+
+function SWEP:UpdateBallPos()
+    if !IsValid(self.BasketballProp) then return end
+
+    local owner = self:GetOwner()
+
+    if !IsValid(owner) then return end
+
+    local vm = owner:GetViewModel()
+    local ballPos = vm:GetBonePosition(0)
+
+    if ballPos == self.LastBallPos then return end
+
+    self.BasketballProp:SetPos(ballPos)
+
+    self.LastBallPos = ballPos
 end
 
 local hitwallcache = {0, 0}
@@ -91,6 +187,13 @@ local traceLineTab = {
     mask = MASK_SOLID,
     output = traceLineResultTab,
 }
+
+local function IsEntityPassable(ent)
+    if !IsValid(ent) then return end
+    if !ent:IsPlayer() then return end
+
+    return ent
+end
 
 function SWEP:BallHitWall() -- pasted from arccw lmao
     local len = 4
@@ -128,6 +231,10 @@ function SWEP:BallHitWall() -- pasted from arccw lmao
 
         if tr.Hit then
             hitwallcache[1] = 1 - tr.Fraction
+
+            if SERVER then
+                self.PassablePlayer = IsEntityPassable(tr.Entity)
+            end
         else
             hitwallcache[1] = 0
             hitwallcache[2] = curTime
@@ -170,13 +277,5 @@ if CLIENT then
         end
 
         WorldModel:DrawModel()
-    end
-elseif SERVER then
-    function SWEP:ShouldDropOnDie()
-        -- aa
-    end
-
-    function SWEP:OnDrop()
-        -- aa
     end
 end
