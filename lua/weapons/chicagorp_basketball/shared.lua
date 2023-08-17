@@ -10,9 +10,10 @@ SWEP.WorldModel = "models/chicagorp/chicagorp_basketball/w_basketball.mdl"
 SWEP.ViewModelFOV = 90
 SWEP.Slot = 0
 SWEP.SlotPos = 5
+SWEP.Primary.Automatic = true
+SWEP.Secondary.Automatic = true
 
 -- traces in think function to drop ball once dunked
--- MRW setupmove detour
 -- primary/secondary code
 
 function SWEP:SetupDataTables()
@@ -23,6 +24,8 @@ end
 function SWEP:Initialize()
     self.m_bInitialized = true
     self.IsBasketball = true
+
+    self.ThrowPower = 0
 
     if CLIENT and !self.m_bDeployed then
         self:CallOnClient("Deploy")
@@ -77,22 +80,28 @@ function SWEP:OnDrop()
     self:Remove() -- We shouldn't drop this since the basketball prop is the weapon.
 end
 
+local animationTime = 1
+
 function SWEP:Think()
     if !self.m_bInitialized then
         self:Initialize()
     end
 
-    self:BallHitWall() -- Does this really have to be serverside too?
-
     local owner = self:GetOwner()
 
     if !IsValid(owner) then return end
+
+    self:BallHitWall() -- Does this really have to be serverside too?
 
     if SERVER then
         self:UpdateBallPos()
     end
 
     if self:GetIsThrowing() or self:GetIsDunking() then return end
+
+    if IsFirstTimePredicted() and !owner:KeyDownLast(IN_ATTACK) and !owner:KeyDown(IN_ATTACK) then
+        self.ThrowPower = math.max(0, self.ThrowPower - 0.1) -- Make this not tick-rate dependent
+    end
 
     local isMoving = ply:GetVelocity():LengthSqr() > 0
     local onGround = owner:OnGround()
@@ -117,41 +126,47 @@ end
 function SWEP:PrimaryAttack()
     if self:GetIsThrowing() or self:GetIsDunking() then return end
 
-    if SERVER and self:GetNearWall() and IsValid(self.PassablePlayer) then
-        SWEP:RemoveBasketball()
+    local owner = self:GetOwner()
+
+    if !IsValid(owner) then return end
+
+    local firstTimePredicted = IsFirstTimePredicted()
+    local attackDown = owner:KeyDown(IN_ATTACK)
+    local attackDownLast = owner:KeyDownLast(IN_ATTACK)
+
+    if firstTimePredicted and self:GetNearWall() and IsValid(self.PassablePlayer) and !attackDown and !attackDownLast then
+        self:RemoveBasketball()
         self:Remove()
 
-        self.PassablePlayer:Give("chicagorp_basketball")
+        if SERVER then -- Pass anim too?
+            self.PassablePlayer:Give("chicagorp_basketball")
+        end
 
         return
     end
 
-    if IsFirstTimePredicted() then
-        -- codehere
+    if firstTimePredicted and attackDownLast then
+        self.ThrowPower = math.min(1, self.ThrowPower + 0.1) -- Make this not tick-rate dependent
     end
 
-    if SERVER then
+    if firstTimePredicted and !attackDown and !attackDownLast then
+        -- start throwing (play anim, remove when anim finished)
+    end
+
+    if SERVER then -- Make this shared?
         self:SetIsThrowing(true)
     end
 end
 
 function SWEP:SecondaryAttack()
     if self:GetIsThrowing() or self:GetIsDunking() then return end
+    if self:GetNearWall() then return end
 
-    if SERVER and self:GetNearWall() and IsValid(self.PassablePlayer) then
-        SWEP:RemoveBasketball()
-        self:Remove()
+    -- start dunk anim
 
-        self.PassablePlayer:Give("chicagorp_basketball")
+    -- starttouch with touch entities? 
 
-        return
-    end
-
-    if IsFirstTimePredicted() then
-        -- codehere
-    end
-
-    if SERVER then
+    if SERVER then -- Make this shared?
         self:SetIsDunking(true)
     end
 end
