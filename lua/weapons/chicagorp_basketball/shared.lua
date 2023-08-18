@@ -15,17 +15,17 @@ SWEP.Secondary.Automatic = true
 
 -- traces in think function to drop ball once dunked
 -- primary/secondary code
+-- throw anim/timer handler (PREDICTED PLEASE)
 
 function SWEP:SetupDataTables()
     self:NetworkVar("Bool", 0, "IsThrowing")
     self:NetworkVar("Bool", 1, "IsDunking")
+    self:NetworkVar("Float", 0, "ThrowPower")
 end
 
 function SWEP:Initialize()
     self.m_bInitialized = true
     self.IsBasketball = true
-
-    self.ThrowPower = 0
 
     if CLIENT and !self.m_bDeployed then
         self:CallOnClient("Deploy")
@@ -33,6 +33,7 @@ function SWEP:Initialize()
 
     self:SetIsThrowing(false)
     self:SetIsDunking(false)
+    self:SetThrowPower(0)
 end
 
 local ballAddPos = Vector(0, 5, 0)
@@ -59,9 +60,11 @@ function SWEP:Deploy()
 end
 
 function SWEP:Holster()
-    if self:GetIsThrowing() or self:GetIsDunking() then return false end
+    if self:GetIsThrowing() or self:GetIsDunking() then return false end -- Fix this, we should be able to holster whenever we want to
 
     self:SendWeaponAnim(ACT_VM_HOLSTER)
+
+    self:SetThrowPower(0)
 
     SWEP:RemoveBasketball()
 
@@ -100,7 +103,7 @@ function SWEP:Think()
     if self:GetIsThrowing() or self:GetIsDunking() then return end
 
     if IsFirstTimePredicted() and !owner:KeyDownLast(IN_ATTACK) and !owner:KeyDown(IN_ATTACK) then
-        self.ThrowPower = math.max(0, self.ThrowPower - 0.1) -- Make this not tick-rate dependent
+        self:SetThrowPower(math.max(0, self:GetThrowPower() - 0.1)) -- Make this not tick-rate dependent
     end
 
     local isMoving = ply:GetVelocity():LengthSqr() > 0
@@ -131,30 +134,30 @@ function SWEP:PrimaryAttack()
     if !IsValid(owner) then return end
 
     local firstTimePredicted = IsFirstTimePredicted()
-    local attackDown = owner:KeyDown(IN_ATTACK)
     local attackDownLast = owner:KeyDownLast(IN_ATTACK)
 
-    if firstTimePredicted and self:GetNearWall() and IsValid(self.PassablePlayer) and !attackDown and !attackDownLast then
+    if firstTimePredicted and self:GetNearWall() and IsValid(self.PassablePlayer) and !attackDownLast then
         self:RemoveBasketball()
-        self:Remove()
 
         if SERVER then -- Pass anim too?
             self.PassablePlayer:Give("chicagorp_basketball")
         end
 
+        self:Remove()
+
         return
     end
 
     if firstTimePredicted and attackDownLast then
-        self.ThrowPower = math.min(1, self.ThrowPower + 0.1) -- Make this not tick-rate dependent
+        self:SetThrowPower(math.min(1, self:GetThrowPower() + 0.1)) -- Make this not tick-rate dependent
     end
 
-    if firstTimePredicted and !attackDown and !attackDownLast then
+    if firstTimePredicted and !attackDownLast and self:GetThrowPower() > 0 then
+        if SERVER then -- Make this shared?
+            self:SetIsThrowing(true)
+        end
+
         -- start throwing (play anim, remove when anim finished)
-    end
-
-    if SERVER then -- Make this shared?
-        self:SetIsThrowing(true)
     end
 end
 
@@ -210,7 +213,7 @@ local function IsEntityPassable(ent)
     return ent
 end
 
-function SWEP:BallHitWall() -- pasted from arccw lmao
+function SWEP:BallHitWall() -- Pasted from ArcCW, checks if the viewmodel hits a wall or an entity
     local len = 4
     local owner = self:GetOwner()
     local curTime = CurTime()
