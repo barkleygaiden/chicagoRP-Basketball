@@ -42,6 +42,7 @@ function SWEP:Deploy()
     self.m_bDeployed = true
 
     self:SetHoldType("slam")
+    self:SendWeaponAnim(ACT_VM_DRAW)
 
     local owner = self:GetOwner()
 
@@ -66,7 +67,7 @@ function SWEP:Holster()
 
     self:SetThrowPower(0)
 
-    SWEP:RemoveBasketball()
+    self:RemoveBasketball()
 
     return true
 end
@@ -97,7 +98,23 @@ function SWEP:Think()
     self:BallHitWall() -- Does this really have to be serverside too?
 
     if SERVER then
-        self:UpdateBallPos()
+        self:UpdateBasketballPos()
+    end
+
+    local curTime = CurTime()
+
+    if IsValid(self.BasketballProp) and self.ThrowTime and (self.ThrowTime) > curTime then
+        if SERVER then
+            self.BasketballProp:SetPreventTransmit(owner, false)
+        end
+
+        self:ThrowBasketball()
+    end
+
+    if self.FinishAction and (self.FinishAction) > curTime then
+        self:SendWeaponAnim(ACT_VM_HOLSTER)
+
+        self:Remove()
     end
 
     if self:GetIsThrowing() or self:GetIsDunking() then return end
@@ -157,7 +174,12 @@ function SWEP:PrimaryAttack()
             self:SetIsThrowing(true)
         end
 
-        -- start throwing (play anim, remove when anim finished)
+        local sequence = self:LookupSequence("throw")
+
+        self:SendViewModelMatchingSequence(sequence)
+
+        self.ThrowTime = CurTime() + 0.3
+        self.FinishAction = CurTime() + 0.5
     end
 end
 
@@ -181,7 +203,23 @@ function SWEP:RemoveBasketball()
 	self.BasketballProp:Remove()
 end
 
-function SWEP:UpdateBallPos()
+function SWEP:ThrowBasketball(mult)
+    if !IsValid(self.BasketballProp) then return end
+
+    mult = mult or self.ThrowPower
+
+    local owner = self:GetOwner()
+    local physObj = self.BasketballProp:GetPhysicsObject()
+
+    if !IsValid(owner) or !IsValid(physObj) then return end
+
+    local aimVec = owner:GetAimVector()
+    aimVec:Mul(100 * mult) -- :D
+    aimVec:Add(VectorRand(-10, 10)) -- Add a random vector with elements (-10, 10)
+    physObj:ApplyForceCenter(aimVec)
+end
+
+function SWEP:UpdateBasketballPos()
     if !IsValid(self.BasketballProp) then return end
 
     local owner = self:GetOwner()
@@ -191,11 +229,42 @@ function SWEP:UpdateBallPos()
     local vm = owner:GetViewModel()
     local ballPos = vm:GetBonePosition(0)
 
+    if !ballPos then return end
     if ballPos == self.LastBallPos then return end
 
     self.BasketballProp:SetPos(ballPos)
 
     self.LastBallPos = ballPos
+end
+
+function SWEP:GetAnimTime(key)
+    local owner = self:GetOwner()
+    local anim = self.Animations[key]
+
+    if !IsValid(owner) or !anim then return 1 end
+
+    local vm = owner:GetViewModel()
+
+    if !IsValid(vm) then return 1 end
+
+    local t = anim.Time
+
+    if !t then
+        local tseq = anim.Source
+
+        if istable(tseq) then
+            tseq["BaseClass"] = nil -- god I hate Lua inheritance
+            tseq = tseq[1]
+        end
+
+        if !tseq then return 1 end
+        tseq = vm:LookupSequence(tseq)
+
+        -- to hell with it, just spits wrong on draw sometimes
+        t = vm:SequenceDuration(tseq) or 1
+    end
+
+    return t
 end
 
 local hitwallcache = {0, 0}
@@ -214,7 +283,7 @@ local function IsEntityPassable(ent)
 end
 
 function SWEP:BallHitWall() -- Pasted from ArcCW, checks if the viewmodel hits a wall or an entity
-    local len = 4
+    local length = 4
     local owner = self:GetOwner()
     local curTime = CurTime()
 
@@ -228,19 +297,19 @@ function SWEP:BallHitWall() -- Pasted from ArcCW, checks if the viewmodel hits a
     if !hitwallcache or hitwallcache[2] != curTime then
         local dir = owner:EyeAngles()
         local src = owner:EyePos()
-        local r, f, u = dir:Right(), dir:Forward(), dir:Up()
+        local right, forward, up = dir:Right(), dir:Forward(), dir:Up()
 
         for i = 1, 3 do
-            src[i] = src[i] + r[i] * ballAddPos[1] + f[i] * ballAddPos[2] + u[i] * ballAddPos[3]
+            src[i] = src[i] + right[i] * ballAddPos[1] + forward[i] * ballAddPos[2] + up[i] * ballAddPos[3]
         end
 
         local filter = {owner, self.BasketballProp}
 
-        f:Mul(len)
-        f:Add(src) -- equals src + (f * len)
+        forward:Mul(length)
+        forward:Add(src) -- equals src + (forward * length)
 
         traceLineTab.start = src
-        traceLineTab.endpos = f
+        traceLineTab.endpos = forward
         traceLineTab.filter = filter
 
         util.TraceLine(traceLineTab)
@@ -270,13 +339,13 @@ if CLIENT then
     local worldModel = ClientsideModel(SWEP.WorldModel)
     worldModel:SetNoDraw(true)
 
+    local offsetVec = Vector(5, -2.7, -3.4) -- Specify a good position
+    local offsetAng = Angle(180, 90, 0)
+
     function SWEP:DrawWorldModel()
         local owner = self:GetOwner()
 
         if IsValid(owner) then
-            local offsetVec = Vector(5, -2.7, -3.4) -- Specify a good position
-            local offsetAng = Angle(180, 90, 0)
-            
             local boneid = owner:LookupBone("ValveBiped.Bip01_R_Hand") -- Right Hand
             if !boneid then return end
 
@@ -294,6 +363,20 @@ if CLIENT then
             worldModel:SetAngles(self:GetAngles())
         end
 
-        WorldModel:DrawModel()
+        worldModel:DrawModel()
     end
 end
+
+SWEP.Animations = {
+    ["idle"] = {
+        Source = "idle"
+    },
+    ["draw"] = {
+        Source = "draw",
+        SoundTable = {
+            {s = ratel, t = 0},
+            {s = common .. "raise.ogg", t = 0.2},
+            {s = common .. "shoulder.ogg",    t = 0.2},
+        },
+    }
+}
