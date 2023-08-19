@@ -28,8 +28,22 @@ function SWEP:RemoveBasketball()
     self.BasketballProp:Remove()
 end
 
+function SWEP:PassBasketball()
+    self:RemoveBasketball()
+
+    if SERVER then -- Pass anim too?
+        self.PassablePlayer:Give("chicagorp_basketball")
+    end
+
+    self:Remove()
+end
+
 function SWEP:ThrowBasketball(mult)
     if !IsValid(self.BasketballProp) then return end
+
+    if SERVER then
+        self.BasketballProp:SetPreventTransmit(owner, false)
+    end
 
     mult = mult or self.ThrowPower
 

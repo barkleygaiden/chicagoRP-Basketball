@@ -92,6 +92,7 @@ function SWEP:Think()
     end
 
     local curTime = CurTime()
+    local firstTimePredicted = IsFirstTimePredicted()
 
     for i = 1, #self.EventTable do
         local event = self.EventTable[i]
@@ -112,16 +113,15 @@ function SWEP:Think()
         end
     end
 
-    if IsValid(self.BasketballProp) and self.ThrowTime and (self.ThrowTime) > curTime then
-        if SERVER then
-            self.BasketballProp:SetPreventTransmit(owner, false)
-        end
-
+    if firstTimePredicted and (self.ThrowTime or 0) > curTime then
         self:ThrowBasketball()
+
+        self.ThrowTime = 0
     end
 
-    if self.FinishAction and (self.FinishAction) > curTime then
+    if firstTimePredicted and (self.FinishAction or 0) > curTime then
         self:SendWeaponAnim(ACT_VM_HOLSTER)
+        self.FinishAction = 0
 
         self:Remove()
     end
@@ -130,7 +130,7 @@ function SWEP:Think()
 
     if self:GetIsThrowing() or self:GetIsDunking() then return end
 
-    if IsFirstTimePredicted() and !owner:KeyDownLast(IN_ATTACK) and !owner:KeyDown(IN_ATTACK) and curTime > (self.NextPowerSubtract or 0) then
+    if firstTimePredicted and !owner:KeyDownLast(IN_ATTACK) and !owner:KeyDown(IN_ATTACK) and curTime > (self.NextPowerSubtract or 0) then
         self:SetThrowPower(math.max(0, self:GetThrowPower() - 0.1)) -- Make this not tick-rate dependent
     end
 
@@ -149,14 +149,8 @@ function SWEP:PrimaryAttack()
     local firstTimePredicted = IsFirstTimePredicted()
     local attackDownLast = owner:KeyDownLast(IN_ATTACK)
 
-    if firstTimePredicted and self:GetNearWall() and IsValid(self.PassablePlayer) and !attackDownLast then
-        self:RemoveBasketball()
-
-        if SERVER then -- Pass anim too?
-            self.PassablePlayer:Give("chicagorp_basketball")
-        end
-
-        self:Remove()
+    if firstTimePredicted and IsValid(self.PassablePlayer) and self:GetNearWall() and !attackDownLast then
+        self:PassBasketball()
 
         return
     end
@@ -170,9 +164,7 @@ function SWEP:PrimaryAttack()
             self:SetIsThrowing(true)
         end
 
-        local sequence = self:LookupSequence("throw")
-
-        self:SendViewModelMatchingSequence(sequence)
+        self:PlayAnimation("throw")
 
         self.ThrowTime = CurTime() + 0.3
         self.FinishAction = CurTime() + 0.5
@@ -185,7 +177,7 @@ function SWEP:SecondaryAttack()
 
     -- start dunk anim
 
-    -- starttouch with touch entities? 
+    -- starttouch with touch entities?
 
     if SERVER then -- Make this shared?
         self:SetIsDunking(true)

@@ -49,7 +49,7 @@ function SWEP:PlayAnimation(key)
             owner:AddVCDSequenceToGestureSlot(GESTURE_SLOT_ATTACK_AND_RELOAD, aseq, anim.TPAnimStartTime or 0, true)
 
             if SERVER then
-                net.Start("arccw_networktpanim")
+                net.Start("chicagoRP_basketball_networktpanim")
                 net.WriteEntity(owner)
                 net.WriteUInt(aseq, 16)
                 net.WriteFloat(anim.TPAnimStartTime or 0)
@@ -131,15 +131,16 @@ function SWEP:PlayEvent(event)
 end
 
 if CLIENT then
-    net.Receive("arccw_networktpanim", function()
+    net.Receive("chicagoRP_basketball_networktpanim", function()
         local ent = net.ReadEntity()
         local aseq = net.ReadUInt(16)
         local starttime = net.ReadFloat()
 
-        if IsValid(ent) and ent != LocalPlayer() then
-            ent:AddVCDSequenceToGestureSlot(GESTURE_SLOT_ATTACK_AND_RELOAD, aseq, starttime, true)
-        end
+        if !IsValid(ent) then return end
+        if ent == LocalPlayer() then return end
+
+        ent:AddVCDSequenceToGestureSlot(GESTURE_SLOT_ATTACK_AND_RELOAD, aseq, starttime, true)
     end)
 elseif SERVER then
-    util.AddNetworkString("arccw_networktpanim")
+    util.AddNetworkString("chicagoRP_basketball_networktpanim")
 end
