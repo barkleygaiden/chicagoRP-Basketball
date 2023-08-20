@@ -13,14 +13,13 @@ SWEP.SlotPos = 5
 SWEP.Primary.Automatic = true
 SWEP.Secondary.Automatic = true
 
--- secondary code
--- traces in think function to drop ball once dunked
--- convert throw/dunk code to timers (with callbacks?)
+-- convert throwtime/finishaction to SetTimer(s)?
 
 function SWEP:SetupDataTables()
     self:NetworkVar("Bool", 0, "IsThrowing")
     self:NetworkVar("Bool", 1, "IsDunking")
     self:NetworkVar("Float", 0, "ThrowPower")
+    self:NetworkVar("Float", 1, "NWPriorityAnim")
 end
 
 function SWEP:Initialize()
@@ -33,6 +32,7 @@ function SWEP:Initialize()
 
     self.LastAnimStartTime = 0
     self.LastAnimFinishTime = 0
+    self.UpdatePos = true
 
     self:SetIsThrowing(false)
     self:SetIsDunking(false)
@@ -62,16 +62,47 @@ function SWEP:Holster()
     return true
 end
 
-function SWEP:Ammo1() -- For third-party HUD's
-    return 1
+function SWEP:PrimaryAttack()
+    if self:GetIsThrowing() or self:GetIsDunking() then return end
+
+    local owner = self:GetOwner()
+
+    if !IsValid(owner) then return end
+
+    local firstTimePredicted = IsFirstTimePredicted()
+    local attackDownLast = owner:KeyDownLast(IN_ATTACK)
+
+    if firstTimePredicted and IsValid(self.PassablePlayer) and self:GetNearWall() and !attackDownLast then
+        self:DoPass()
+
+        return
+    end
+
+    if firstTimePredicted and attackDownLast then
+        self:SetThrowPower(math.min(1, self:GetThrowPower() + 0.1)) -- Make this not tick-rate dependent
+    end
+
+    if firstTimePredicted and !attackDownLast and self:GetThrowPower() > 0 then
+        if SERVER then -- Make this shared?
+            self:SetIsThrowing(true)
+        end
+
+        self:PlayAnimation("throw")
+
+        self.ThrowTime = CurTime() + 0.3
+        self.FinishAction = CurTime() + 0.5
+    end
 end
 
-function SWEP:Ammo2() -- For third-party HUD's
-    return 1
-end
+function SWEP:SecondaryAttack()
+    if self:GetIsThrowing() or self:GetIsDunking() then return end
+    if self:GetNearWall() then return end
 
-function SWEP:OnDrop()
-    self:Remove() -- We shouldn't drop this since the basketball prop is the weapon.
+    self:PlayAnimation("dunk_start")
+
+    if SERVER then -- Make this shared?
+        self:SetIsDunking(true)
+    end
 end
 
 local animationTime = 1
@@ -87,7 +118,7 @@ function SWEP:Think()
 
     self:BasketballHitWall() -- Does this really have to be serverside too?
 
-    if SERVER then
+    if SERVER and self.UpdatePos then
         self:UpdateBasketballPos()
     end
 
@@ -114,7 +145,7 @@ function SWEP:Think()
     end
 
     if firstTimePredicted and (self.ThrowTime or 0) > curTime then
-        self:ThrowBasketball()
+        self:DoThrow()
 
         self.ThrowTime = 0
     end
@@ -139,49 +170,16 @@ function SWEP:Think()
     self.NextPowerSubtract = CurTime() + 0.1
 end
 
-function SWEP:PrimaryAttack()
-    if self:GetIsThrowing() or self:GetIsDunking() then return end
-
-    local owner = self:GetOwner()
-
-    if !IsValid(owner) then return end
-
-    local firstTimePredicted = IsFirstTimePredicted()
-    local attackDownLast = owner:KeyDownLast(IN_ATTACK)
-
-    if firstTimePredicted and IsValid(self.PassablePlayer) and self:GetNearWall() and !attackDownLast then
-        self:PassBasketball()
-
-        return
-    end
-
-    if firstTimePredicted and attackDownLast then
-        self:SetThrowPower(math.min(1, self:GetThrowPower() + 0.1)) -- Make this not tick-rate dependent
-    end
-
-    if firstTimePredicted and !attackDownLast and self:GetThrowPower() > 0 then
-        if SERVER then -- Make this shared?
-            self:SetIsThrowing(true)
-        end
-
-        self:PlayAnimation("throw")
-
-        self.ThrowTime = CurTime() + 0.3
-        self.FinishAction = CurTime() + 0.5
-    end
+function SWEP:Ammo1() -- For third-party HUD's
+    return 1
 end
 
-function SWEP:SecondaryAttack()
-    if self:GetIsThrowing() or self:GetIsDunking() then return end
-    if self:GetNearWall() then return end
+function SWEP:Ammo2() -- For third-party HUD's
+    return 1
+end
 
-    -- start dunk anim
-
-    -- starttouch with touch entities?
-
-    if SERVER then -- Make this shared?
-        self:SetIsDunking(true)
-    end
+function SWEP:OnDrop()
+    self:Remove() -- We shouldn't drop this since the basketball prop is the weapon.
 end
 
 if CLIENT then

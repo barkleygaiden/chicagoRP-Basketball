@@ -1,11 +1,13 @@
-function SWEP:PlayAnimation(key)
+function SWEP:PlayAnimation(key, priority)
     if !key then return end
 
     local startfrom = 0
-
     local anim = self.Animations[key]
+    priority = priority or false
 
     if !anim then return end
+
+    if self:GetPriorityAnim() and !priority then return end
 
     local isFirstTimePredicted = IsFirstTimePredicted()
 
@@ -79,6 +81,12 @@ function SWEP:PlayIdleAnimation()
 
     if !IsValid(owner) then return end
 
+    if self:GetIsDunking() then
+        self:PlayAnimation("idle_dunking")
+
+        return
+    end
+
     local ianim = "idle"
     local isMoving = owner:GetVelocity():LengthSqr() > 0
     local onGround = owner:OnGround()
@@ -89,7 +97,7 @@ function SWEP:PlayIdleAnimation()
         ianim = "holdprimary"
     end
 
-    self:PlayAnimation(ianim)
+    self:PlayAnimation(ianim, false)
 end
 
 function SWEP:GetAnimTime(key)
@@ -120,6 +128,22 @@ function SWEP:GetAnimTime(key)
     end
 
     return t
+end
+
+function SWEP:GetPriorityAnim()
+    return self:GetNWPriorityAnim() > CurTime()
+end
+
+function SWEP:SetPriorityAnim(v)
+    if isbool(v) then
+        if v then
+            self:SetNWPriorityAnim(math.huge)
+        else
+            self:SetNWPriorityAnim(-math.huge)
+        end
+    elseif isnumber(v) and v > self:GetNWPriorityAnim() then
+        self:SetNWPriorityAnim(v)
+    end
 end
 
 function SWEP:PlayEvent(event)

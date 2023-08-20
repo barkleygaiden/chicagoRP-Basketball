@@ -14,21 +14,25 @@ function SWEP:CreateBasketball()
     basketball:Spawn()
     basketball:Activate()
 
+    basketball:SetController(self)
     basketball:SetPreventTransmit(owner, true)
 
-    self.BasketballProp = basketball
+    self:SetBasketball(basketball)
 
     return basketball
 end
 
 function SWEP:RemoveBasketball()
-    if !SERVER then return end 
-    if !IsValid(self.BasketballProp) then return end
+    if !SERVER then return end
 
-    self.BasketballProp:Remove()
+    local basketBall = self:GetBasketball()
+
+    if !IsValid(basketBall) then return end
+
+    basketBall:Remove()
 end
 
-function SWEP:PassBasketball()
+function SWEP:DoPass()
     self:RemoveBasketball()
 
     if SERVER then -- Pass anim too?
@@ -38,17 +42,19 @@ function SWEP:PassBasketball()
     self:Remove()
 end
 
-function SWEP:ThrowBasketball(mult)
-    if !IsValid(self.BasketballProp) then return end
+function SWEP:DoThrow(mult)
+    local basketBall = self:GetBasketball()
+
+    if !IsValid(basketBall) then return end
 
     if SERVER then
-        self.BasketballProp:SetPreventTransmit(owner, false)
+        basketBall:SetPreventTransmit(owner, false)
     end
 
     mult = mult or self.ThrowPower
 
     local owner = self:GetOwner()
-    local physObj = self.BasketballProp:GetPhysicsObject()
+    local physObj = basketBall:GetPhysicsObject()
 
     if !IsValid(owner) or !IsValid(physObj) then return end
 
@@ -59,8 +65,31 @@ function SWEP:ThrowBasketball(mult)
     physObj:ApplyForceCenter(aimVec)
 end
 
+function SWEP:DoDunk(pos)
+    local basketBall = self:GetBasketball()
+
+    if !IsValid(basketBall) then return end
+
+    self:PlayAnimation("dunk_end")
+
+    self.UpdatePos = false
+
+    if SERVER then
+        pos = pos or self:LocalToWorld(ballAddPos)
+
+        basketBall:SetPos(pos)
+        basketBall:SetPreventTransmit(owner, false)
+    end
+
+    self:EmitSound("chicagorp/chicagorp_basketball/score.ogg", 75, 100, 1, CHAN_AUTO)
+
+    self.FinishAction = CurTime() + 0.3
+end
+
 function SWEP:UpdateBasketballPos()
-    if !IsValid(self.BasketballProp) then return end
+    local basketBall = self:GetBasketball()
+
+    if !IsValid(basketBall) then return end
 
     local owner = self:GetOwner()
 
@@ -72,7 +101,7 @@ function SWEP:UpdateBasketballPos()
     if !ballPos then return end
     if ballPos == self.LastBallPos then return end
 
-    self.BasketballProp:SetPos(ballPos)
+    basketBall:SetPos(ballPos)
 
     self.LastBallPos = ballPos
 end
