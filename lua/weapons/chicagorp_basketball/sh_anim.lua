@@ -19,7 +19,7 @@ function SWEP:PlayAnimation(key, priority)
 
             local st = event.t - startfrom
 
-            if st >= 0 and isnumber(event.t) and isFirstTimePredicted then
+            if st >= 0 and isFirstTimePredicted then
                 self:AddTimer(st, function() self:OurViewPunch(event.vel, event.ang) end, id)
             end
         end
@@ -82,7 +82,11 @@ function SWEP:PlayIdleAnimation()
     if !IsValid(owner) then return end
 
     if self:GetIsDunking() then
-        self:PlayAnimation("idle_dunking")
+        self:PlayAnimation("idle_dunk")
+
+        return
+    elseif self:GetIsThrowing() then
+        self:PlayAnimation("idle_throw")
 
         return
     end
@@ -91,16 +95,14 @@ function SWEP:PlayIdleAnimation()
     local isMoving = owner:GetVelocity():LengthSqr() > 0
     local onGround = owner:OnGround()
 
-    if isMoving and !onGround then
-        ianim = "idleair"
-    elseif !isMoving then
-        ianim = "holdprimary"
+    if !isMoving or !onGround then
+        ianim = "idle_air"
     end
 
     self:PlayAnimation(ianim, false)
 end
 
-function SWEP:GetAnimTime(key)
+function SWEP:GetAnimKeyTime(key)
     local owner = self:GetOwner()
     local anim = self.Animations[key]
 

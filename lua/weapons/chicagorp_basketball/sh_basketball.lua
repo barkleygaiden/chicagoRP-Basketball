@@ -43,6 +43,8 @@ function SWEP:DoPass()
 end
 
 function SWEP:DoThrow(mult)
+    if !IsFirstTimePredicted() then return end
+
     local basketBall = self:GetBasketball()
 
     if !IsValid(basketBall) then return end
@@ -71,6 +73,7 @@ function SWEP:DoDunk(pos)
     if !IsValid(basketBall) then return end
 
     self:PlayAnimation("dunk_end")
+    self:SetPriorityAnim(CurTime() + self:GetAnimKeyTime("dunk_end"))
 
     self.UpdatePos = false
 
@@ -83,7 +86,15 @@ function SWEP:DoDunk(pos)
 
     self:EmitSound("chicagorp/chicagorp_basketball/score.ogg", 75, 100, 1, CHAN_AUTO)
 
-    self.FinishAction = CurTime() + 0.3
+    self:AddTimer(CurTime() + 0.3, function() self:FinishAction() end, id)
+end
+
+function SWEP:FinishAction()
+    if !IsFirstTimePredicted() then return end
+
+    self:SendWeaponAnim(ACT_VM_HOLSTER)
+
+    self:Remove()
 end
 
 function SWEP:UpdateBasketballPos()

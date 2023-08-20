@@ -13,8 +13,6 @@ SWEP.SlotPos = 5
 SWEP.Primary.Automatic = true
 SWEP.Secondary.Automatic = true
 
--- convert throwtime/finishaction to SetTimer(s)?
-
 function SWEP:SetupDataTables()
     self:NetworkVar("Bool", 0, "IsThrowing")
     self:NetworkVar("Bool", 1, "IsDunking")
@@ -88,9 +86,9 @@ function SWEP:PrimaryAttack()
         end
 
         self:PlayAnimation("throw")
+        self:SetPriorityAnim(CurTime() + self:GetAnimKeyTime("throw"))
 
-        self.ThrowTime = CurTime() + 0.3
-        self.FinishAction = CurTime() + 0.5
+        self:AddTimer(CurTime() + 0.3, function() self:DoThrow() end, id)
     end
 end
 
@@ -99,6 +97,7 @@ function SWEP:SecondaryAttack()
     if self:GetNearWall() then return end
 
     self:PlayAnimation("dunk_start")
+    self:SetPriorityAnim(CurTime() + self:GetAnimKeyTime("dunk_start"))
 
     if SERVER then -- Make this shared?
         self:SetIsDunking(true)
@@ -123,7 +122,6 @@ function SWEP:Think()
     end
 
     local curTime = CurTime()
-    local firstTimePredicted = IsFirstTimePredicted()
 
     for i = 1, #self.EventTable do
         local event = self.EventTable[i]
@@ -144,24 +142,11 @@ function SWEP:Think()
         end
     end
 
-    if firstTimePredicted and (self.ThrowTime or 0) > curTime then
-        self:DoThrow()
-
-        self.ThrowTime = 0
-    end
-
-    if firstTimePredicted and (self.FinishAction or 0) > curTime then
-        self:SendWeaponAnim(ACT_VM_HOLSTER)
-        self.FinishAction = 0
-
-        self:Remove()
-    end
-
     self:ProcessTimers()
 
     if self:GetIsThrowing() or self:GetIsDunking() then return end
 
-    if firstTimePredicted and !owner:KeyDownLast(IN_ATTACK) and !owner:KeyDown(IN_ATTACK) and curTime > (self.NextPowerSubtract or 0) then
+    if IsFirstTimePredicted() and !owner:KeyDownLast(IN_ATTACK) and !owner:KeyDown(IN_ATTACK) and curTime > (self.NextPowerSubtract or 0) then
         self:SetThrowPower(math.max(0, self:GetThrowPower() - 0.1)) -- Make this not tick-rate dependent
     end
 
@@ -218,13 +203,40 @@ SWEP.Animations = {
     ["idle"] = {
         Source = "idle"
     },
-    ["draw"] = {
-        Source = "draw",
+    ["idle_air"] = {
+        Source = "idle_air"
+    },
+    ["idle_throw"] = {
+        Source = "idle_throw"
+    },
+    ["idle_dunk"] = {
+        Source = "idle_dunk"
+    },
+    ["throw"] = {
+        Source = "idle_dunk",
         TPAnim = ACT_MP_GRENADE1_DRAW,
         SoundTable = {
             {s = ratel, t = 0},
             {s = common .. "raise.ogg", t = 0.2},
             {s = common .. "shoulder.ogg",    t = 0.2},
-        },
+        }
+    },
+    ["dunk_start"] = {
+        Source = "idle_dunk",
+        TPAnim = ACT_MP_GRENADE1_DRAW,
+        SoundTable = {
+            {s = ratel, t = 0},
+            {s = common .. "raise.ogg", t = 0.2},
+            {s = common .. "shoulder.ogg",    t = 0.2},
+        }
+    },
+    ["dunk_end"] = {
+        Source = "idle_dunk",
+        TPAnim = ACT_MP_GRENADE1_DRAW,
+        SoundTable = {
+            {s = ratel, t = 0},
+            {s = common .. "raise.ogg", t = 0.2},
+            {s = common .. "shoulder.ogg",    t = 0.2},
+        }
     }
 }
