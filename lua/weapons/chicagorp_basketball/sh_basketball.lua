@@ -61,10 +61,10 @@ function SWEP:DoThrow(mult)
     if !IsValid(owner) or !IsValid(physObj) then return end
 
     local aimVec = owner:GetAimVector()
-    aimVec:Mul(100 * mult) -- :D
+    aimVec:Mul(100 * mult) -- Scales velocity with our ThrowPower mult.
     aimVec:Add(VectorRand(-10, 10)) -- Add a random vector with elements (-10, 10)
 
-    physObj:ApplyForceCenter(aimVec)
+    physObj:ApplyForceCenter(aimVec) -- Applies our final velocity vector to the physobj's center.
 end
 
 function SWEP:DoDunk(pos)
