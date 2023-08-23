@@ -1,5 +1,5 @@
-ENT.Type = "anim"
 ENT.Base = "base_gmodentity"
+ENT.Type = "anim"
 
 ENT.PrintName = "chicagoRP - Basketball"
 ENT.Category = "chicagoRP"

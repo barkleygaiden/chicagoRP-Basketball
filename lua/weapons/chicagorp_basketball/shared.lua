@@ -12,6 +12,7 @@ SWEP.Slot = 0
 SWEP.SlotPos = 5
 SWEP.Primary.Automatic = true
 SWEP.Secondary.Automatic = true
+SWEP.IsBasketball = true
 
 function SWEP:SetupDataTables()
     self:NetworkVar("Bool", 0, "IsThrowing")
@@ -22,7 +23,6 @@ end
 
 function SWEP:Initialize()
     self.m_bInitialized = true
-    self.IsBasketball = true
 
     if CLIENT and !self.m_bDeployed then
         self:CallOnClient("Deploy")

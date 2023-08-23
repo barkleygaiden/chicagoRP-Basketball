@@ -4,12 +4,15 @@ ENT.Spawnable = false
 ENT.AdminSpawnable = false
 ENT.IsScoreZone = true
 
+local dummyMin = Vector(1, 1, 1)
+local dummyMax = Vector(-1, -1, -1)
+
 function ENT:Initialize()
     if SERVER then
         self:SetSolid(SOLID_BBOX)
         self:SetTrigger(true)
-        self:SetPos(zone.min)
-        self:SetCollisionBoundsWS(zone.min, zone.max)
+        self:SetPos((zone and zone.min) or vector_origin)
+        self:SetCollisionBoundsWS((zone and zone.min) or dummyMin, (zone and zone.max) or dummyMax)
     end
 
     self:AddEFlags(EFL_KEEP_ON_RECREATE_ENTITIES)
@@ -19,7 +22,11 @@ function ENT:GetGameZone()
     return self.GameZone
 end
 
-function ENT:GetConfig(index)
+function ENT:SetGameZone(zone)
+    self.GameZone = zone
+end
+
+function ENT:GetConfig()
     return self.Config
 end
 
